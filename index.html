@@ -1,0 +1,1763 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#c89353">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="追剧笔记">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<title>追剧笔记</title>
+<style>
+  :root {
+    --bg: #fbf4e8;
+    --bg-elev: #fff9ec;
+    --bg-card: #fffdf7;
+    --border: rgba(139, 109, 66, 0.12);
+    --border-strong: rgba(139, 109, 66, 0.25);
+    --text: #3d2e1f;
+    --text-dim: #7a6750;
+    --text-mute: #a89478;
+    --accent: #c89353;
+    --accent-deep: #a8783f;
+    --accent-soft: rgba(200, 147, 83, 0.18);
+    --danger: #b54f3f;
+    --success: #6b8e6b;
+    --tag-bg: rgba(139, 109, 66, 0.08);
+    --tag-active: rgba(200, 147, 83, 0.28);
+    --shadow: 0 4px 24px rgba(139, 109, 66, 0.12);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", serif;
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: contain;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at top, rgba(200, 147, 83, 0.10), transparent 55%),
+      radial-gradient(ellipse at bottom right, rgba(210, 180, 140, 0.12), transparent 55%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    position: relative;
+    max-width: 700px;
+    margin: 0 auto;
+    min-height: 100vh;
+    padding-bottom: 72px;
+    z-index: 1;
+  }
+
+  .page { display: none; padding: 20px 18px; }
+  .page.active { display: block; }
+
+  .header {
+    padding: 18px 4px 22px;
+  }
+
+  .brand {
+    font-size: 13px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    text-transform: uppercase;
+    font-weight: 500;
+    margin-bottom: 6px;
+    opacity: 0.9;
+  }
+
+  .page-title {
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: var(--text);
+  }
+
+  .page-sub {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  /* Home hero card */
+  .install-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    background: transparent;
+    border: 1px dashed var(--border-strong);
+    color: var(--accent-deep);
+    padding: 12px 18px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    margin-bottom: 18px;
+    letter-spacing: 0.5px;
+    transition: background 0.2s;
+  }
+  .install-btn:hover, .install-btn:active {
+    background: var(--accent-soft);
+  }
+  .install-btn span { font-weight: bold; font-size: 14px; }
+
+  .hero-card {
+    background: linear-gradient(135deg, #fffdf7 0%, #f5ead2 100%);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 22px 20px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+
+  .hero-card::after {
+    content: "";
+    position: absolute;
+    top: -40%;
+    right: -20%;
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(200, 147, 83, 0.16), transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-greeting {
+    font-size: 14px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
+    color: #fff8e7;
+    border: none;
+    border-radius: 12px;
+    padding: 14px 22px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform 0.15s, opacity 0.15s;
+    position: relative;
+    z-index: 1;
+    box-shadow: 0 2px 10px rgba(200, 147, 83, 0.25);
+  }
+
+  .btn-primary:active { transform: scale(0.97); opacity: 0.9; }
+  .btn-primary.is-disabled {
+    background: #d5cdb8;
+    color: #8a7c60;
+    box-shadow: none;
+    opacity: 0.75;
+  }
+
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .btn-ghost.active {
+    background: var(--tag-active);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 4px 12px;
+    font-size: 13px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  .section-title span:first-child { text-transform: uppercase; }
+
+  .empty {
+    padding: 60px 20px 40px;
+    text-align: center;
+    color: var(--text-mute);
+  }
+
+  .empty-icon {
+    font-size: 40px;
+    opacity: 0.3;
+    margin-bottom: 12px;
+  }
+
+  .empty-text {
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+
+  /* Note card */
+  .note-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 2px 10px rgba(139, 109, 66, 0.05);
+  }
+
+  .note-card:active { transform: scale(0.99); border-color: var(--border-strong); }
+
+  .note-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    gap: 10px;
+  }
+
+  .note-drama {
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .note-ep {
+    font-size: 12px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+
+  .note-content {
+    font-size: 14px;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-bottom: 10px;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .note-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .tag-pill {
+    display: inline-block;
+    background: var(--tag-bg);
+    color: var(--text-dim);
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+
+  .note-time {
+    font-size: 11px;
+    color: var(--text-mute);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .char-pill {
+    display: inline-block;
+    background: rgba(150, 130, 170, 0.12);
+    color: #b9a8d0;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    margin-right: 6px;
+  }
+
+  /* Form */
+  .form-group {
+    margin-bottom: 18px;
+  }
+
+  .form-label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .form-label .req { color: var(--accent); margin-left: 4px; }
+  .form-label .hint { color: var(--text-mute); font-size: 11px; letter-spacing: 0; text-transform: none; }
+
+  .input, .textarea {
+    width: 100%;
+    background: #fffef8;
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-family: inherit;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .input:focus, .textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+
+  .field-error-msg {
+    color: var(--danger);
+    font-size: 12px;
+    margin-top: 6px;
+    display: block;
+  }
+
+  .textarea {
+    min-height: 160px;
+    resize: vertical;
+    line-height: 1.7;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 10px;
+  }
+
+  .input-row .input { flex: 1; }
+
+  .tags-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tag-btn {
+    background: var(--tag-bg);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 7px 14px;
+    border-radius: 20px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+
+  .tag-btn.active {
+    background: var(--tag-active);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+    min-height: 8px;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--tag-active);
+    color: var(--accent);
+    padding: 5px 10px 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+  }
+
+  .chip-remove {
+    color: var(--accent);
+    opacity: 0.6;
+    cursor: pointer;
+    font-weight: bold;
+  }
+
+  .suggest-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .suggest-tag {
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: var(--text-mute);
+    padding: 3px 10px;
+    border-radius: 14px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 28px;
+  }
+
+  .btn-block {
+    width: 100%;
+    padding: 15px;
+    font-size: 15px;
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    padding: 15px;
+    font-size: 15px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
+    width: 100%;
+  }
+
+  /* Material library */
+  .search-bar {
+    position: relative;
+    margin-bottom: 14px;
+  }
+
+  .search-bar .input {
+    padding-left: 42px;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-mute);
+    font-size: 16px;
+    pointer-events: none;
+  }
+
+  .filter-section {
+    margin-bottom: 16px;
+  }
+
+  .scroll-row {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .scroll-row::-webkit-scrollbar { display: none; }
+
+  .group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 4px 10px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+  }
+
+  .group-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .group-count {
+    font-size: 12px;
+    color: var(--text-mute);
+    margin-left: 8px;
+  }
+
+  .batch-bar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .batch-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+
+  .batch-btn.active {
+    background: var(--tag-active);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .note-card.selectable {
+    position: relative;
+    padding-left: 44px;
+  }
+
+  .checkbox {
+    position: absolute;
+    left: 16px;
+    top: 18px;
+    width: 18px;
+    height: 18px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: transparent;
+  }
+
+  .note-card.selected .checkbox {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #1a1208;
+  }
+
+  .floating-bar {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-elev);
+    border: 1px solid var(--border-strong);
+    border-radius: 14px;
+    padding: 10px 14px;
+    display: none;
+    gap: 8px;
+    box-shadow: var(--shadow);
+    z-index: 10;
+    align-items: center;
+  }
+
+  .floating-bar.show { display: inline-flex; }
+
+  .floating-bar .count {
+    font-size: 12px;
+    color: var(--accent);
+    padding: 0 6px;
+  }
+
+  .floating-bar button {
+    background: var(--accent);
+    color: #1a1208;
+    border: none;
+    padding: 7px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .floating-bar button.ghost {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border-strong);
+  }
+
+  /* Detail page */
+  .detail-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px 20px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow);
+  }
+
+  .detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+  }
+
+  .detail-drama {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+
+  .detail-meta {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .detail-content {
+    font-size: 15px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-bottom: 18px;
+  }
+
+  .detail-footer-meta {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+
+  .detail-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .back-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    margin-right: 8px;
+  }
+
+  /* Bottom nav */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(255, 251, 240, 0.94);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    z-index: 100;
+    box-shadow: 0 -4px 20px rgba(139, 109, 66, 0.08);
+  }
+
+  .nav-inner {
+    display: flex;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+
+  .nav-item {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 14px 0 18px;
+    cursor: pointer;
+    color: var(--text-mute);
+    font-family: inherit;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .nav-item.active { color: var(--accent); }
+
+  .nav-icon { font-size: 18px; }
+  .nav-label { font-size: 11px; letter-spacing: 1px; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    top: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: var(--bg-elev);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    padding: 12px 22px;
+    border-radius: 12px;
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 200;
+    box-shadow: var(--shadow);
+    max-width: 85vw;
+    text-align: center;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(60, 45, 30, 0.28);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+    padding: 20px;
+  }
+
+  .modal-overlay.show { display: flex; }
+
+  .modal {
+    background: var(--bg-card);
+    border: 1px solid var(--border-strong);
+    border-radius: 16px;
+    padding: 22px;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: 0 20px 50px rgba(139, 109, 66, 0.22);
+  }
+
+  .modal-title {
+    font-size: 17px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .modal-text {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 18px;
+    line-height: 1.6;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    flex-direction: column;
+  }
+
+  .highlight { background: var(--accent); color: #fff8e7; padding: 1px 4px; border-radius: 4px; }
+
+  @media (min-width: 768px) {
+    .app { padding-bottom: 80px; }
+    .page { padding: 32px 24px; }
+    .page-title { font-size: 30px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 首页 -->
+  <div class="page active" id="page-home">
+    <div class="header">
+      <div class="brand">DRAMATIC NOTES</div>
+      <h1 class="page-title">追剧笔记</h1>
+      <div class="page-sub">记录灵感，写剧评时快速调取</div>
+    </div>
+
+    <div class="hero-card">
+      <div class="hero-greeting" id="hero-greeting">此刻想记下什么？</div>
+      <div class="hero-title" id="hero-title">让感受被留存</div>
+      <button class="btn-primary" onclick="goNew()">
+        <span style="font-size:18px;">＋</span>新增记录
+      </button>
+    </div>
+
+    <button class="install-btn" id="install-btn" style="display:none;">
+      <span>＋</span>安装到桌面 · 离线可用
+    </button>
+
+    <div class="section-title">
+      <span>最近记录</span>
+      <span style="letter-spacing:0; font-size:12px;" id="home-count"></span>
+    </div>
+    <div id="home-list"></div>
+    <div id="home-empty" style="display:none;">
+      <div class="empty-icon">🎬</div>
+      <div class="empty-text">还没有记录，从第一条开始吧</div>
+      <button class="btn-ghost" onclick="goNew()">+ 新建记录</button>
+    </div>
+  </div>
+
+  <!-- 新增/编辑页 -->
+  <div class="page" id="page-new">
+    <div class="header">
+      <button class="back-btn" onclick="goHome()">← 返回</button>
+      <div style="margin-top:14px;">
+        <div class="brand" id="new-brand">NEW NOTE</div>
+        <h1 class="page-title" id="new-title">新增记录</h1>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">剧名<span class="req">*</span><span class="hint"> — 可复用历史剧名</span></label>
+      <input class="input" id="f-drama" placeholder="例如：去有风的地方" autocomplete="off">
+      <span class="field-error-msg" id="err-drama" style="display:none;">此项为必填</span>
+      <div class="suggest-row" id="drama-suggest"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">内容<span class="req">*</span></label>
+      <textarea class="input textarea" id="f-content" placeholder="一句台词、一段感受、一个伏笔…"></textarea>
+      <span class="field-error-msg" id="err-content" style="display:none;">此项为必填</span>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">标签<span class="hint"> — 多选 · 未填自动补「感受」</span></label>
+      <div class="tags-wrap" id="f-tags"></div>
+      <div class="suggest-row" id="tags-custom"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">集数<span class="hint"> — 选填</span></label>
+      <input class="input" id="f-ep" placeholder="例如：第12集 或 12" autocomplete="off">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">角色<span class="hint"> — 选填 · 多个用逗号或回车分隔</span></label>
+      <input class="input" id="f-char-input" placeholder="输入后回车添加" autocomplete="off">
+      <div class="chip-list" id="f-chars"></div>
+      <div class="suggest-row" id="char-suggest"></div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn-secondary" onclick="goHome()">取消</button>
+      <button class="btn-primary btn-block" id="btn-save" onclick="saveNote()">保存</button>
+    </div>
+  </div>
+
+  <!-- 素材库 -->
+  <div class="page" id="page-lib">
+    <div class="header">
+      <div class="brand">MATERIAL LIBRARY</div>
+      <h1 class="page-title">素材库</h1>
+      <div class="page-sub">按剧名整理，支持关键词与标签筛选</div>
+    </div>
+
+    <div class="search-bar">
+      <span class="search-icon">⌕</span>
+      <input class="input" id="f-search" placeholder="搜索剧名 / 角色 / 内容" oninput="renderLib()">
+    </div>
+
+    <div class="filter-section">
+      <div class="section-title"><span>按标签</span></div>
+      <div class="scroll-row" id="lib-tag-filter"></div>
+    </div>
+
+    <div class="filter-section">
+      <div class="section-title"><span>按剧名</span></div>
+      <div class="scroll-row" id="lib-drama-filter"></div>
+    </div>
+
+    <div id="lib-list"></div>
+    <div id="lib-empty" style="display:none;">
+      <div class="empty-icon">📽</div>
+      <div class="empty-text" id="lib-empty-text">还没有素材</div>
+      <button class="btn-ghost" onclick="goNew()">+ 新建记录</button>
+    </div>
+  </div>
+
+  <!-- 详情页 -->
+  <div class="page" id="page-detail">
+    <div class="header">
+      <button class="back-btn" onclick="backFromDetail()">← 返回</button>
+      <div style="margin-top:14px;">
+        <div class="brand">NOTE DETAIL</div>
+        <h1 class="page-title">素材详情</h1>
+      </div>
+    </div>
+    <div class="detail-card">
+      <div class="detail-header">
+        <div>
+          <div class="detail-drama" id="dt-drama"></div>
+          <div class="detail-meta" id="dt-meta"></div>
+        </div>
+      </div>
+      <div class="note-tags" id="dt-tags" style="margin-bottom:14px;"></div>
+      <div class="detail-content" id="dt-content"></div>
+      <div class="detail-footer-meta" id="dt-chars"></div>
+    </div>
+    <div class="detail-actions">
+      <button class="btn-secondary" onclick="editCurrent()">编辑</button>
+      <button class="btn-primary btn-block" onclick="copyCurrent()">复制</button>
+    </div>
+    <div style="height:10px;"></div>
+    <button class="btn-secondary" onclick="deleteCurrent()" style="color: var(--danger); border-color: rgba(201, 112, 100, 0.3);">删除这条记录</button>
+  </div>
+
+</div>
+
+<!-- 底部导航 -->
+<nav class="bottom-nav">
+  <div class="nav-inner">
+    <button class="nav-item active" data-nav="home" onclick="switchNav('home')">
+      <span class="nav-icon">◐</span>
+      <span class="nav-label">首页</span>
+    </button>
+    <button class="nav-item" data-nav="new" onclick="switchNav('new')">
+      <span class="nav-icon">＋</span>
+      <span class="nav-label">新增</span>
+    </button>
+    <button class="nav-item" data-nav="lib" onclick="switchNav('lib')">
+      <span class="nav-icon">▤</span>
+      <span class="nav-label">素材库</span>
+    </button>
+  </div>
+</nav>
+
+<!-- 批量浮动栏 -->
+<div class="floating-bar" id="batch-bar">
+  <span class="count" id="batch-count">已选 0 条</span>
+  <button class="ghost" onclick="copyBatch('text')">复制文本</button>
+  <button class="ghost" onclick="copyBatch('md')">复制 Markdown</button>
+  <button class="ghost" onclick="downloadBatch()">导出</button>
+  <button class="danger" onclick="deleteBatch()">删除</button>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- 保存后选择弹窗 -->
+<div class="modal-overlay" id="modal-saved">
+  <div class="modal">
+    <div class="modal-title">✓ 已保存</div>
+    <div class="modal-text">记录成功入库，接下来你想…</div>
+    <div class="modal-actions">
+      <button class="btn-primary btn-block" onclick="closeModal('modal-saved'); resetNew();">创建新记录</button>
+      <button class="btn-secondary" onclick="closeModal('modal-saved'); goLib();">去素材库</button>
+    </div>
+  </div>
+</div>
+
+<!-- 集数未填提示弹窗 -->
+<div class="modal-overlay" id="modal-ep-missing">
+  <div class="modal">
+    <div class="modal-title">还没有填集数哦～</div>
+    <div class="modal-text">集数可以帮你以后更快定位这段感受。可以先保存，之后也能编辑。</div>
+    <div class="modal-actions">
+      <button class="btn-primary btn-block" onclick="confirmSaveWithoutEp()">确认保存</button>
+      <button class="btn-secondary" onclick="closeModal('modal-ep-missing'); focusEp();">返回修改</button>
+    </div>
+  </div>
+</div>
+
+<!-- 批量导出选择弹窗 -->
+<div class="modal-overlay" id="modal-export">
+  <div class="modal">
+    <div class="modal-title">选择导出格式</div>
+    <div class="modal-text">纯文本适合粘贴到笔记/公众号；Markdown 适合有格式的写作工具。</div>
+    <div class="modal-actions">
+      <button class="btn-primary btn-block" onclick="closeModal('modal-export'); downloadFile('txt');">纯文本 (.txt)</button>
+      <button class="btn-secondary" onclick="closeModal('modal-export'); downloadFile('md');">Markdown (.md)</button>
+      <button class="btn-secondary" onclick="closeModal('modal-export');">取消</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ========= 数据层 ========= */
+const STORAGE_KEY = 'drama_notes_v1';
+const DEFAULT_TAGS = ['台词', '感受', '剧情', '角色', '金句', '伏笔'];
+
+function loadNotes() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+function saveNotes(list) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+function uid() {
+  return 'n_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+function fmtTime(ts) {
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}, ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/* ========= 状态 ========= */
+let notes = loadNotes();
+let selectedTags = [];     // 新建页选中的标签
+let selectedChars = [];    // 新建页选中的角色数组
+let editingId = null;      // 编辑中的 ID（null=新建）
+let currentDetailId = null;
+let lastPage = 'home';
+let libFilterTag = null;
+let libFilterDrama = null;
+let batchSelected = new Set();
+
+/* ========= 工具：自定义标签管理 ========= */
+function getAllTagsUsed() {
+  const s = new Set(DEFAULT_TAGS);
+  notes.forEach(n => (n.tags || []).forEach(t => s.add(t)));
+  return Array.from(s);
+}
+function getAllDramas() {
+  const s = new Set();
+  notes.forEach(n => n.drama_name && s.add(n.drama_name));
+  return Array.from(s).sort();
+}
+function getAllChars() {
+  const s = new Set();
+  notes.forEach(n => (n.character || []).forEach(c => s.add(c)));
+  return Array.from(s).sort();
+}
+function getLastDrama() {
+  if (notes.length === 0) return '';
+  const sorted = [...notes].sort((a,b)=> b.created_at - a.created_at);
+  return sorted[0].drama_name || '';
+}
+
+/* ========= Toast ========= */
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> el.classList.remove('show'), 2200);
+}
+
+/* ========= 导航 ========= */
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navMap = { home: 'home', new: 'new', lib: 'lib', detail: null };
+  if (navMap[name]) document.querySelector(`.nav-item[data-nav="${navMap[name]}"]`).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function goHome() { renderHome(); showPage('home'); }
+function goNew() { resetNew(); showPage('new'); }
+function goLib() { renderLib(); showPage('lib'); }
+function switchNav(name) {
+  if (name === 'home') goHome();
+  else if (name === 'new') goNew();
+  else if (name === 'lib') goLib();
+}
+function backFromDetail() {
+  if (lastPage === 'lib') goLib();
+  else goHome();
+}
+
+/* ========= 首页渲染 ========= */
+function renderHome() {
+  // greeting
+  const hour = new Date().getHours();
+  let greet = '此刻想记下什么？';
+  if (hour < 6) greet = '深夜追剧时的灵感';
+  else if (hour < 12) greet = '上午好，记下此刻感受';
+  else if (hour < 18) greet = '午后的剧与感受';
+  else greet = '晚上好，为灵感留痕';
+  document.getElementById('hero-greeting').textContent = greet;
+  document.getElementById('hero-title').textContent = notes.length ? '让感受被留存' : '从第一条记录开始';
+
+  const list = document.getElementById('home-list');
+  const empty = document.getElementById('home-empty');
+  document.getElementById('home-count').textContent = notes.length ? `共 ${notes.length} 条` : '';
+
+  if (notes.length === 0) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  const recent = [...notes].sort((a,b)=> b.created_at - a.created_at).slice(0, 8);
+  list.innerHTML = recent.map(n => cardHTML(n)).join('');
+}
+
+function cardHTML(n) {
+  const epText = n.episode ? ` · ${String(n.episode).startsWith('第') ? n.episode : '第' + n.episode + '集'}` : '';
+  const charsText = (n.character && n.character.length) ? n.character.map(c => `<span class="char-pill">${escapeHtml(c)}</span>`).join('') : '';
+  const tagsText = (n.tags || []).map(t => `<span class="tag-pill">${escapeHtml(t)}</span>`).join('');
+  return `<div class="note-card" onclick="openDetail('${n.id}')">
+    <div class="note-meta">
+      <div class="note-drama">《${escapeHtml(n.drama_name)}》${epText}</div>
+      <div class="note-ep">${charsText}</div>
+    </div>
+    <div class="note-content">${escapeHtml(n.content)}</div>
+    <div class="note-tags">${tagsText}</div>
+    <div class="note-time"><span>${fmtTime(n.created_at)}</span></div>
+  </div>`;
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c]);
+}
+
+/* ========= 新建/编辑页 ========= */
+function resetNew() {
+  editingId = null;
+  document.getElementById('new-title').textContent = '新增记录';
+  document.getElementById('new-brand').textContent = 'NEW NOTE';
+  // 默认带入最近剧名
+  document.getElementById('f-drama').value = getLastDrama();
+  document.getElementById('f-content').value = '';
+  document.getElementById('f-ep').value = '';
+  document.getElementById('f-char-input').value = '';
+  selectedTags = [];
+  selectedChars = [];
+  // 清除之前的错误提示
+  document.getElementById('err-drama').style.display = 'none';
+  document.getElementById('err-content').style.display = 'none';
+  renderTagsPicker();
+  renderCharChips();
+  renderDramaSuggest();
+  renderCharSuggest();
+  renderTagsCustom();
+  if (typeof updateSaveBtn === 'function') updateSaveBtn();
+  // 自动聚焦内容
+  setTimeout(()=> document.getElementById('f-content').focus(), 50);
+}
+
+function renderTagsPicker() {
+  // 默认标签按钮
+  const wrap = document.getElementById('f-tags');
+  wrap.innerHTML = DEFAULT_TAGS.map(t => {
+    const active = selectedTags.includes(t);
+    return `<button class="tag-btn ${active?'active':''}" onclick="toggleTag('${t}')">${escapeHtml(t)}</button>`;
+  }).join('');
+}
+
+function toggleTag(t) {
+  const i = selectedTags.indexOf(t);
+  if (i >= 0) selectedTags.splice(i, 1);
+  else selectedTags.push(t);
+  renderTagsPicker();
+  renderTagsCustom();
+}
+
+function renderTagsCustom() {
+  // 显示已选自定义标签（不在默认中）
+  const custom = selectedTags.filter(t => !DEFAULT_TAGS.includes(t));
+  const box = document.getElementById('tags-custom');
+  if (custom.length === 0) {
+    // 显示 +自定义 按钮
+    box.innerHTML = `<button class="suggest-tag" onclick="addCustomTag()">+ 自定义标签</button>`;
+    return;
+  }
+  box.innerHTML = custom.map(t =>
+    `<span class="chip">${escapeHtml(t)}<span class="chip-remove" onclick="toggleTag('${escapeAttr(t)}')">×</span></span>`
+  ).join('') + `<button class="suggest-tag" onclick="addCustomTag()">+ 自定义</button>`;
+}
+
+function escapeAttr(s) { return String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+function addCustomTag() {
+  const name = prompt('输入自定义标签名');
+  if (!name) return;
+  const t = name.trim();
+  if (!t) return;
+  if (!selectedTags.includes(t)) selectedTags.push(t);
+  renderTagsPicker();
+  renderTagsCustom();
+}
+
+function renderCharChips() {
+  const box = document.getElementById('f-chars');
+  if (selectedChars.length === 0) { box.innerHTML = ''; return; }
+  box.innerHTML = selectedChars.map((c, i) =>
+    `<span class="chip">${escapeHtml(c)}<span class="chip-remove" onclick="removeChar(${i})">×</span></span>`
+  ).join('');
+}
+function removeChar(i) { selectedChars.splice(i, 1); renderCharChips(); }
+
+function renderDramaSuggest() {
+  const box = document.getElementById('drama-suggest');
+  const dramas = getAllDramas();
+  if (dramas.length === 0) { box.innerHTML = ''; return; }
+  box.innerHTML = `<span style="font-size:11px;color:var(--text-mute);margin-right:4px;">最近：</span>` +
+    dramas.slice(0, 6).map(d =>
+      `<button class="suggest-tag" onclick="setDrama('${escapeAttr(d)}')">${escapeHtml(d)}</button>`
+    ).join('');
+}
+function setDrama(name) {
+  document.getElementById('f-drama').value = name;
+}
+
+function renderCharSuggest() {
+  const box = document.getElementById('char-suggest');
+  const chars = getAllChars().filter(c => !selectedChars.includes(c));
+  if (chars.length === 0) { box.innerHTML = ''; return; }
+  box.innerHTML = `<span style="font-size:11px;color:var(--text-mute);margin-right:4px;">历史角色：</span>` +
+    chars.slice(0, 8).map(c =>
+      `<button class="suggest-tag" onclick="addCharSuggest('${escapeAttr(c)}')">${escapeHtml(c)}</button>`
+    ).join('');
+}
+function addCharSuggest(c) { if (!selectedChars.includes(c)) selectedChars.push(c); renderCharChips(); renderCharSuggest(); }
+
+// 角色输入框：回车/逗号/顿号添加
+document.addEventListener('DOMContentLoaded', () => {
+  const charInput = document.getElementById('f-char-input');
+  charInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ',' || e.key === '，' || e.key === '、') {
+      e.preventDefault();
+      const v = charInput.value.trim();
+      if (v && !selectedChars.includes(v)) selectedChars.push(v);
+      charInput.value = '';
+      renderCharChips();
+      renderCharSuggest();
+    }
+  });
+  charInput.addEventListener('blur', () => {
+    const v = charInput.value.trim();
+    if (v && !selectedChars.includes(v)) {
+      selectedChars.push(v);
+      charInput.value = '';
+      renderCharChips();
+      renderCharSuggest();
+    }
+  });
+
+  // 实时校验：剧名 + 内容必填 -> 控制保存按钮颜色
+  const dramaInput = document.getElementById('f-drama');
+  const contentInput = document.getElementById('f-content');
+  const saveBtn = document.getElementById('btn-save');
+  window.updateSaveBtn = function() {
+    const ok = dramaInput.value.trim() && contentInput.value.trim();
+    if (ok) saveBtn.classList.remove('is-disabled');
+    else saveBtn.classList.add('is-disabled');
+  };
+  dramaInput.addEventListener('input', updateSaveBtn);
+  contentInput.addEventListener('input', updateSaveBtn);
+
+  // 初始化渲染首页
+  renderHome();
+  updateSaveBtn();
+});
+
+/* ========= 保存 ========= */
+function saveNote() {
+  const drama = document.getElementById('f-drama').value.trim();
+  const content = document.getElementById('f-content').value.trim();
+  const ep = document.getElementById('f-ep').value.trim();
+
+  // 清除之前的错误提示
+  document.getElementById('err-drama').style.display = 'none';
+  document.getElementById('err-content').style.display = 'none';
+
+  // 情况 C：必填字段未填 —— 字段下直接提示
+  let missing = false;
+  if (!drama) { document.getElementById('err-drama').style.display = 'block'; missing = true; }
+  if (!content) { document.getElementById('err-content').style.display = 'block'; missing = true; }
+  if (missing) return;
+
+  // 编辑模式直接走保存流程（不做集数提示打断）
+  if (editingId) {
+    doSave(drama, content, ep, /*isEdit=*/ true);
+    return;
+  }
+
+  // 情况 B：必填已填，但集数未填 —— 先弹提示
+  if (!ep) {
+    openModal('modal-ep-missing');
+    return;
+  }
+
+  // 情况 A：必填已填 + 集数已填 —— 直接成功
+  doSave(drama, content, ep, /*isEdit=*/ false);
+}
+
+function confirmSaveWithoutEp() {
+  const drama = document.getElementById('f-drama').value.trim();
+  const content = document.getElementById('f-content').value.trim();
+  const ep = document.getElementById('f-ep').value.trim();
+  closeModal('modal-ep-missing');
+  doSave(drama, content, ep, /*isEdit=*/ false);
+}
+
+function focusEp() {
+  const el = document.getElementById('f-ep');
+  el.focus();
+  // 手机端可选滚动到可视区
+  setTimeout(() => el.scrollIntoView({ block: 'center', behavior: 'smooth' }), 50);
+}
+
+function doSave(drama, content, ep, isEdit) {
+  const tags = selectedTags.length ? [...selectedTags] : ['感受'];
+  const now = Date.now();
+
+  if (isEdit && editingId) {
+    const idx = notes.findIndex(n => n.id === editingId);
+    if (idx >= 0) {
+      notes[idx] = {
+        ...notes[idx],
+        drama_name: drama,
+        content,
+        tags,
+        episode: ep,
+        character: [...selectedChars],
+        updated_at: now
+      };
+      saveNotes(notes);
+      toast('已更新');
+      if (currentDetailId === editingId) renderDetail();
+      else goHome();
+    }
+    editingId = null;
+    return;
+  }
+
+  notes.push({
+    id: uid(),
+    drama_name: drama,
+    content,
+    tags,
+    episode: ep,
+    character: [...selectedChars],
+    created_at: now,
+    updated_at: now
+  });
+  saveNotes(notes);
+  openModal('modal-saved');
+}
+
+/* ========= 素材库渲染 ========= */
+function renderLib() {
+  const all = getAllTagsUsed();
+  const dramas = getAllDramas();
+  // 标签筛选
+  const tagBox = document.getElementById('lib-tag-filter');
+  tagBox.innerHTML = `<button class="tag-btn ${libFilterTag===null?'active':''}" onclick="setLibFilterTag(null)">全部</button>` +
+    all.map(t => `<button class="tag-btn ${libFilterTag===t?'active':''}" onclick="setLibFilterTag('${escapeAttr(t)}')">${escapeHtml(t)}</button>`).join('');
+  const dramaBox = document.getElementById('lib-drama-filter');
+  dramaBox.innerHTML = `<button class="tag-btn ${libFilterDrama===null?'active':''}" onclick="setLibFilterDrama(null)">全部</button>` +
+    dramas.map(d => `<button class="tag-btn ${libFilterDrama===d?'active':''}" onclick="setLibFilterDrama('${escapeAttr(d)}')">${escapeHtml(d)}</button>`).join('');
+
+  const kw = document.getElementById('f-search').value.trim().toLowerCase();
+
+  // 过滤
+  let filtered = notes.filter(n => {
+    if (libFilterTag && !(n.tags || []).includes(libFilterTag)) return false;
+    if (libFilterDrama && n.drama_name !== libFilterDrama) return false;
+    if (kw) {
+      const hay = [n.drama_name, n.content, (n.character||[]).join(' '), (n.tags||[]).join(' ')].join(' ').toLowerCase();
+      if (!hay.includes(kw)) return false;
+    }
+    return true;
+  });
+
+  const list = document.getElementById('lib-list');
+  const empty = document.getElementById('lib-empty');
+
+  if (filtered.length === 0) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    document.getElementById('lib-empty-text').textContent =
+      notes.length === 0 ? '还没有素材，从第一条记录开始' : '没有匹配的素材，换个关键词试试';
+    hideBatchBar();
+    return;
+  }
+  empty.style.display = 'none';
+
+  // 按剧名分组
+  const groups = {};
+  filtered.forEach(n => {
+    (groups[n.drama_name] = groups[n.drama_name] || []).push(n);
+  });
+  // 组内按时间倒序
+  Object.keys(groups).forEach(k => groups[k].sort((a,b)=> b.created_at - a.created_at));
+  // 组排序：按最新一条的时间倒序
+  const groupKeys = Object.keys(groups).sort((a,b) => {
+    return Math.max(...groups[b].map(n => n.created_at)) - Math.max(...groups[a].map(n => n.created_at));
+  });
+
+  let html = '';
+  groupKeys.forEach(k => {
+    const items = groups[k];
+    const inBatch = batchSelected.size > 0;
+    const allSel = items.every(n => batchSelected.has(n.id));
+    html += `<div class="group-header">
+      <div><span class="group-title">《${escapeHtml(k)}》</span><span class="group-count">${items.length} 条</span></div>
+      <div class="batch-bar">
+        <button class="batch-btn" onclick="toggleGroupSelect('${escapeAttr(k)}')">${allSel?'取消全选':'全选本组'}</button>
+        <button class="batch-btn ${inBatch?'active':''}" onclick="toggleGroupSelectMode('${escapeAttr(k)}')">批量模式</button>
+      </div>
+    </div>`;
+    items.forEach(n => {
+      const selected = batchSelected.has(n.id);
+      const showCheckbox = batchSelected.size > 0 || libFilterDrama === k && batchSelected.size > 0 ? true : false;
+      // 简化：只要 batchSelected 非空 或 用户点了「批量模式」 都显示 checkbox
+      // 这里统一显示 checkbox（当 batchSelected 非空时）
+      const cls = batchSelected.size > 0 ? 'selectable' : '';
+      const sel = batchSelected.has(n.id) ? 'selected' : '';
+      html += `<div class="note-card ${cls} ${sel}" onclick="toggleBatch('${n.id}', event)">
+        ${batchSelected.size>0 ? `<div class="checkbox">✓</div>` : ''}
+        <div class="note-meta">
+          <div class="note-drama" style="font-size:12px;">${n.episode ? escapeHtml(String(n.episode).startsWith('第')?n.episode:'第'+n.episode+'集') : ''}</div>
+        </div>
+        <div class="note-content">${highlight(escapeHtml(n.content), kw)}</div>
+        <div class="note-tags">${(n.tags||[]).map(t=>`<span class="tag-pill">${escapeHtml(t)}</span>`).join('')}</div>
+        <div class="note-time"><span>${fmtTime(n.created_at)}</span><span style="color:var(--text-mute);">${(n.character||[]).slice(0,2).map(c=>escapeHtml(c)).join(' · ') || ''}</span></div>
+      </div>`;
+    });
+  });
+  list.innerHTML = html;
+
+  updateBatchBar();
+}
+
+function highlight(text, kw) {
+  if (!kw) return text;
+  // 简易高亮
+  const re = new RegExp('(' + kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  return text.replace(re, '<span class="highlight">$1</span>');
+}
+
+function setLibFilterTag(t) { libFilterTag = t; renderLib(); }
+function setLibFilterDrama(d) { libFilterDrama = d; renderLib(); }
+
+function toggleGroupSelect(drama) {
+  // 切换该组所有记录
+  const groupIds = notes.filter(n => n.drama_name === drama).map(n => n.id);
+  const allIn = groupIds.every(id => batchSelected.has(id));
+  if (allIn) groupIds.forEach(id => batchSelected.delete(id));
+  else groupIds.forEach(id => batchSelected.add(id));
+  renderLib();
+}
+
+function toggleGroupSelectMode(drama) {
+  // 简单：如果当前未选中该组，全选；否则清空
+  const groupIds = notes.filter(n => n.drama_name === drama).map(n => n.id);
+  const anyIn = groupIds.some(id => batchSelected.has(id));
+  if (anyIn) groupIds.forEach(id => batchSelected.delete(id));
+  else groupIds.forEach(id => batchSelected.add(id));
+  renderLib();
+}
+
+function toggleBatch(id, ev) {
+  // 如果 batch 已选中存在，点击即切换选中；否则打开详情
+  if (batchSelected.size > 0) {
+    if (batchSelected.has(id)) batchSelected.delete(id);
+    else batchSelected.add(id);
+    renderLib();
+    return;
+  }
+  // 长按逻辑：这里用简单判断——若按住超过 300ms 视为进入批量
+  // 为简化，改为：若按住 Shift 或双击进入批量；否则打开详情
+  if (ev && ev.shiftKey) {
+    batchSelected.add(id);
+    renderLib();
+  } else {
+    // 检查是否刚刚有同卡片的快速点击 —— 简化直接打开详情
+    // 加一个小功能：在详情打开之前，如果用户按住不放则算批量
+    const card = ev.currentTarget;
+    if (card.dataset.longpress === '1') {
+      card.dataset.longpress = '0';
+      return;
+    }
+    openDetail(id);
+  }
+}
+
+// 长按进入批量模式
+(function addLongPress() {
+  let pressTimer = null;
+  document.addEventListener('touchstart', (e) => {
+    const card = e.target.closest('.note-card');
+    if (!card) return;
+    pressTimer = setTimeout(() => {
+      if (card.dataset && card.dataset) {
+        // 触发批量
+        card.dataset.longpress = '1';
+        const idMatch = card.getAttribute('onclick')?.match(/'([^']+)'/);
+        if (idMatch) {
+          const id = idMatch[1];
+          if (id && !batchSelected.has(id)) {
+            batchSelected.add(id);
+            renderLib();
+            toast('已进入批量选择');
+          }
+        }
+      }
+    }, 400);
+  }, {passive: true});
+  document.addEventListener('touchend', () => clearTimeout(pressTimer));
+  document.addEventListener('touchmove', () => clearTimeout(pressTimer));
+  document.addEventListener('mousedown', (e) => {
+    const card = e.target.closest('.note-card');
+    if (!card) return;
+    pressTimer = setTimeout(() => {
+      card.dataset.longpress = '1';
+      const m = card.getAttribute('onclick')?.match(/'([^']+)'/);
+      if (m) {
+        batchSelected.add(m[1]);
+        renderLib();
+        toast('已选中 — 继续点击可多选');
+      }
+    }, 500);
+  });
+  document.addEventListener('mouseup', () => clearTimeout(pressTimer));
+})();
+
+function updateBatchBar() {
+  const bar = document.getElementById('batch-bar');
+  const count = batchSelected.size;
+  document.getElementById('batch-count').textContent = `已选 ${count} 条`;
+  if (count > 0) bar.classList.add('show');
+  else bar.classList.remove('show');
+}
+function hideBatchBar() {
+  batchSelected.clear();
+  document.getElementById('batch-bar').classList.remove('show');
+}
+
+/* ========= 详情 ========= */
+function openDetail(id) {
+  const n = notes.find(x => x.id === id);
+  if (!n) return;
+  currentDetailId = id;
+  lastPage = document.querySelector('.page.active')?.id === 'page-lib' ? 'lib' : 'home';
+  renderDetail();
+  showPage('detail');
+}
+
+function renderDetail() {
+  const n = notes.find(x => x.id === currentDetailId);
+  if (!n) return;
+  document.getElementById('dt-drama').textContent = '《' + n.drama_name + '》';
+  const ep = n.episode ? ` · ${String(n.episode).startsWith('第') ? n.episode : '第' + n.episode + '集'}` : '';
+  document.getElementById('dt-meta').textContent = `${fmtTime(n.created_at)}${ep}`;
+  document.getElementById('dt-content').textContent = n.content;
+  document.getElementById('dt-tags').innerHTML = (n.tags||[]).map(t=>`<span class="tag-pill">${escapeHtml(t)}</span>`).join('');
+  document.getElementById('dt-chars').innerHTML = (n.character||[]).map(c=>`<span class="char-pill">${escapeHtml(c)}</span>`).join('') + `<span style="font-size:12px;color:var(--text-mute);">创建于 ${fmtTime(n.created_at)}</span>`;
+}
+
+function editCurrent() {
+  const n = notes.find(x => x.id === currentDetailId);
+  if (!n) return;
+  editingId = n.id;
+  document.getElementById('new-title').textContent = '编辑记录';
+  document.getElementById('new-brand').textContent = 'EDIT NOTE';
+  document.getElementById('f-drama').value = n.drama_name;
+  document.getElementById('f-content').value = n.content;
+  document.getElementById('f-ep').value = n.episode || '';
+  document.getElementById('f-char-input').value = '';
+  selectedTags = [...(n.tags || [])];
+  selectedChars = [...(n.character || [])];
+  document.getElementById('err-drama').style.display = 'none';
+  document.getElementById('err-content').style.display = 'none';
+  renderTagsPicker();
+  renderCharChips();
+  renderDramaSuggest();
+  renderCharSuggest();
+  renderTagsCustom();
+  if (typeof updateSaveBtn === 'function') updateSaveBtn();
+  showPage('new');
+}
+
+function deleteCurrent() {
+  if (!confirm('确认删除这条记录？')) return;
+  notes = notes.filter(n => n.id !== currentDetailId);
+  saveNotes(notes);
+  currentDetailId = null;
+  toast('已删除');
+  goHome();
+}
+
+function copyCurrent() {
+  const n = notes.find(x => x.id === currentDetailId);
+  if (!n) return;
+  const text = formatAsText([n]);
+  copyToClipboard(text, '已复制到剪贴板');
+}
+
+/* ========= 复制/导出 ========= */
+function formatAsText(list) {
+  return list.map(n => {
+    const ep = n.episode ? (String(n.episode).startsWith('第') ? n.episode : '第' + n.episode + '集') : '';
+    const lines = [];
+    lines.push(`创建时间：${fmtTime(n.created_at)}`);
+    lines.push(`《${n.drama_name}》${ep}`);
+    if (n.character && n.character.length) lines.push(`角色：${n.character.join(' / ')}`);
+    if (n.tags && n.tags.length) lines.push(`标签：${n.tags.join(' / ')}`);
+    lines.push(`内容：${n.content}`);
+    return lines.join('\n');
+  }).join('\n\n---\n\n');
+}
+function formatAsMarkdown(list) {
+  return list.map(n => {
+    const ep = n.episode ? (String(n.episode).startsWith('第') ? n.episode : '第' + n.episode + '集') : '';
+    let md = `### 《${n.drama_name}》${ep}\n`;
+    md += `- 创建时间：${fmtTime(n.created_at)}\n`;
+    if (n.character && n.character.length) md += `- 角色：${n.character.join(' / ')}\n`;
+    if (n.tags && n.tags.length) md += `- 标签：${n.tags.join(' / ')}\n`;
+    md += `- 内容：${n.content}\n`;
+    return md;
+  }).join('\n');
+}
+
+function copyToClipboard(text, msg) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(
+      () => toast(msg || '已复制'),
+      () => fallbackCopy(text, msg)
+    );
+  } else {
+    fallbackCopy(text, msg);
+  }
+}
+function fallbackCopy(text, msg) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.top = '0';
+  ta.style.left = '0';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try { document.execCommand('copy'); toast(msg || '已复制'); }
+  catch (e) { toast('复制失败，请手动复制'); }
+  document.body.removeChild(ta);
+}
+
+function copyBatch(type) {
+  const ids = Array.from(batchSelected);
+  if (ids.length === 0) { toast('请先选择素材'); return; }
+  const list = notes.filter(n => ids.includes(n.id)).sort((a,b)=> a.created_at - b.created_at);
+  const text = type === 'md' ? formatAsMarkdown(list) : formatAsText(list);
+  copyToClipboard(text, `已复制 ${list.length} 条`);
+}
+
+function downloadBatch() {
+  if (batchSelected.size === 0) { toast('请先选择素材'); return; }
+  openModal('modal-export');
+}
+function downloadFile(type) {
+  const ids = Array.from(batchSelected);
+  const list = notes.filter(n => ids.includes(n.id)).sort((a,b)=> a.created_at - b.created_at);
+  const content = type === 'md' ? formatAsMarkdown(list) : formatAsText(list);
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `追剧笔记_${list[0].drama_name}_${Date.now()}.${type}`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); document.body.removeChild(a); }, 100);
+  toast(`已导出 ${list.length} 条`);
+}
+
+/* ========= Modal ========= */
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// 初始化
+renderHome();
+
+/* ========= PWA：Service Worker 注册 & 安装提示 ========= */
+(function initPWA() {
+  // 注册 Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {
+        // 本地 file:// 打开时浏览器会拒绝注册，属于预期失败，不影响功能
+      });
+    });
+  }
+
+  // 安装提示：浏览器触发 beforeinstallprompt 时显示按钮
+  let deferredPrompt = null;
+  const installBtn = document.getElementById('install-btn');
+
+  function showInstallBtn() {
+    if (installBtn && !isStandalone()) installBtn.style.display = 'inline-flex';
+  }
+  function hideInstallBtn() {
+    if (installBtn) installBtn.style.display = 'none';
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    showInstallBtn();
+  });
+
+  window.addEventListener('appinstalled', () => {
+    hideInstallBtn();
+    deferredPrompt = null;
+    if (typeof toast === 'function') toast('已安装到桌面 ✓');
+  });
+
+  // 已经以独立窗口模式打开，则不显示按钮
+  function isStandalone() {
+    return (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true
+    );
+  }
+  if (isStandalone()) hideInstallBtn();
+  // 延迟一点再检查一次，确保 display-mode 状态稳定
+  setTimeout(() => {
+    if (!deferredPrompt && !isStandalone()) {
+      // 有些浏览器不会立即触发 beforeinstallprompt，也给个提示机会
+      // 但为了不打扰用户，这里保持静默；仅在事件触发时显示按钮
+    }
+  }, 1500);
+
+  if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) {
+        // 如果浏览器暂未触发事件，提示用户从菜单手动安装
+        if (typeof toast === 'function') toast('请从浏览器菜单选择「添加到主屏幕」或「安装应用」');
+        return;
+      }
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') hideInstallBtn();
+      deferredPrompt = null;
+    });
+  }
+})();
+</script>
+</body>
+</html>
