@@ -1219,24 +1219,27 @@ async function syncFromSupabase() {
   if (!supabaseClient || !currentUser) return;
   if (isSyncing) return;
   isSyncing = true;
+  let pulled = 0, pushed = 0;
   try {
     const { data, error } = await supabaseClient
       .from('drama_notes')
       .select('*')
       .order('created_at', { ascending: false });
     if (error) throw error;
-    if (!data || data.length === 0) {
-      await pushPendingToSupabase();
-      return;
+    if (data && data.length > 0) {
+      const remoteList = data.map(noteFromSupabase);
+      const byId = new Map();
+      notes.forEach(n => byId.set(n.id, n));
+      remoteList.forEach(r => byId.set(r.id, r));
+      notes = Array.from(byId.values()).sort((a,b)=> b.created_at - a.created_at);
+      pulled = remoteList.length;
     }
-    const remoteList = data.map(noteFromSupabase);
-    const byId = new Map();
-    notes.forEach(n => byId.set(n.id, n));
-    remoteList.forEach(r => byId.set(r.id, r));
-    notes = Array.from(byId.values()).sort((a,b)=> b.created_at - a.created_at);
+    // 无论云端是否有数据，都要把本地未上传的记录推上去
+    pushed = await pushPendingToSupabase();
     saveNotes(notes);
     localStorage.setItem(SYNC_KEY, String(Date.now()));
-    toast(`已同步 ${remoteList.length} 条记录`);
+    if (pulled || pushed) toast(`同步完成：拉 ${pulled} 条，上传 ${pushed} 条`);
+    else toast('已与云端同步');
   } catch (err) {
     toast('同步失败：' + (err && err.message ? err.message : err));
   } finally {
@@ -1257,12 +1260,15 @@ async function pushPendingToSupabase() {
         .select('id')
         .maybeSingle();
       if (error) throw error;
-      if (data && data.id) n._synced = true;
+      if (data && data.id) {
+        // 用云端返回的 UUID 替换本地 id
+        const idx = notes.findIndex(x => x.id === n.id);
+        if (idx >= 0) notes[idx] = { ...notes[idx], id: data.id, _synced: true };
+      }
       done++;
-    } catch (e) { /* 跳过本条，稍后继续尝试 */ }
+    } catch (e) { /* 跳过本条，稍后重试 */ }
   }
   saveNotes(notes);
-  if (done) toast(`已上传 ${done} 条到云端`);
   return done;
 }
 
@@ -1586,16 +1592,42 @@ function doSave(drama, content, ep, isEdit) {
       notes[idx] = updated;
       saveNotes(notes);
       if (supabaseClient && currentUser) {
-        supabaseClient.from('drama_notes').update({
-          drama_name: drama,
-          content,
-          episode: ep || null,
-          tag: tags[0] || '感受',
-          character: (selectedChars.length ? [...selectedChars] : null)
-        }).eq('id', editingId).then(({ error }) => {
-          if (!error) notes[idx]._synced = true;
-          saveNotes(notes);
-        }).catch(() => {});
+        const isSupabaseId = !editingId.startsWith('n_');
+        if (isSupabaseId) {
+          // 已经是 Supabase 记录：直接 update
+          supabaseClient.from('drama_notes').update({
+            drama_name: drama, content,
+            episode: ep || null,
+            tag: tags[0] || '感受',
+            character: (selectedChars.length ? [...selectedChars] : null)
+          }).eq('id', editingId).then(({ error }) => {
+            if (!error) { notes[idx]._synced = true; saveNotes(notes); }
+          }).catch(() => {});
+        } else {
+          // 这是本地创建的记录（未上传过）：当作新记录插入，成功后替换本地 id
+          supabaseClient.from('drama_notes').insert({
+            drama_name: drama, content,
+            episode: ep || null,
+            tag: tags[0] || '感受',
+            character: (selectedChars.length ? [...selectedChars] : null)
+          }).select('id').maybeSingle().then(({ data, error }) => {
+            if (!error && data && data.id) {
+              // 删掉本地旧的 uid 记录，再以 UUID 形式重新写入（_synced=true）
+              notes = notes.filter(n => n.id !== editingId);
+              notes.unshift({
+                id: data.id,
+                drama_name: drama, content, tags,
+                episode: ep,
+                character: [...selectedChars],
+                created_at: notes[idx]?.created_at || now,
+                updated_at: now,
+                tag: tags[0] || '感受',
+                _synced: true
+              });
+              saveNotes(notes);
+            }
+          }).catch(() => {});
+        }
       }
       toast('已更新');
       if (currentDetailId === editingId) renderDetail();
@@ -1607,30 +1639,28 @@ function doSave(drama, content, ep, isEdit) {
 
   const newNote = {
     id: uid(),
-    drama_name: drama,
-    content,
-    tags,
-    episode: ep,
-    character: [...selectedChars],
-    created_at: now,
-    updated_at: now,
+    drama_name: drama, content, tags,
+    episode: ep, character: [...selectedChars],
+    created_at: now, updated_at: now,
     tag: tags[0] || '感受',
-    _synced: false
+    _synced: !currentUser // 未登录时直接标记为已同步（不影响，因为不走云端）
   };
   notes.unshift(newNote);
   saveNotes(notes);
 
   if (supabaseClient && currentUser) {
     supabaseClient.from('drama_notes').insert({
-      drama_name: drama,
-      content,
+      drama_name: drama, content,
       episode: ep || null,
       tag: tags[0] || '感受',
       character: (selectedChars.length ? [...selectedChars] : null)
     }).select('id').maybeSingle().then(({ data, error }) => {
       if (!error && data && data.id) {
-        const local = notes.find(n => n.id === newNote.id);
-        if (local) { local._synced = true; saveNotes(notes); }
+        const localIdx = notes.findIndex(n => n.id === newNote.id);
+        if (localIdx >= 0) {
+          notes[localIdx] = { ...notes[localIdx], id: data.id, _synced: true };
+          saveNotes(notes);
+        }
       }
     }).catch(() => {});
   }
