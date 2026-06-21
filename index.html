@@ -1198,7 +1198,9 @@ function noteToSupabase(n) {
     content: n.content,
     episode: (n.episode && String(n.episode).trim()) || null,
     tag: (n.tags && n.tags[0]) || n.tag || '感受',
-    character_list: (n.character && n.character.length) ? [...n.character] : null
+    character_list: Array.isArray(n.character) ? [...n.character] : [],
+    created_at: n.created_at ? new Date(n.created_at).toISOString() : new Date().toISOString(),
+    updated_at: n.updated_at ? new Date(n.updated_at).toISOString() : new Date().toISOString()
   };
   try { console.log('[Supabase] insert payload:', payload); } catch(e) {}
   return payload;
@@ -1210,7 +1212,7 @@ function noteFromSupabase(row) {
     content: row.content,
     tags: row.tag ? [row.tag] : ['感受'],
     episode: row.episode || '',
-    character: row.character_list || row.characters || row.character || [],
+    character: Array.isArray(row.character_list) ? row.character_list : [],
     created_at: new Date(row.created_at).getTime() || Date.now(),
     updated_at: new Date(row.updated_at).getTime() || Date.now(),
     tag: row.tag || '感受',
@@ -1227,8 +1229,7 @@ async function syncFromSupabase() {
   const FIRST_SYNC_KEY = 'drama_notes_first_sync_' + currentUser.id;
   const isFirstSyncForUser = !localStorage.getItem(FIRST_SYNC_KEY);
 
-  // 先把本地 notes 原样保留一份：一旦网络出错 / 云端异常（例如返回空），
-  // 我们绝对不动本地的现有内容，避免"重新打开 app 后记录全没了"的灾难。
+  // 关键：同步失败、异常或网络问题时，绝对恢复此 snapshot，不动本地内容。
   const snapshotBefore = notes.slice();
   const snapshotSize = snapshotBefore.length;
 
@@ -1236,7 +1237,7 @@ async function syncFromSupabase() {
     // 1. 先把本地未上传的记录 push 到云端
     pushed = await pushPendingToSupabase();
 
-    // 2. 从云端拉取当前用户的所有记录
+    // 2. 从云端拉取当前用户的所有记录（云端是权威源）
     const { data, error } = await supabaseClient
       .from('drama_notes')
       .select('*')
@@ -1245,7 +1246,7 @@ async function syncFromSupabase() {
 
     const remoteList = (data || []).map(noteFromSupabase);
 
-    // 3. 合并策略（三态）：
+    // 3. 三态合并策略：
     //    - 首次同步该账号：本地 ∪ 云端，按 id 去重，绝不删除
     //    - 非首次同步：云端权威 + 本地 _synced=false 的待上传记录
     let merged;
@@ -1261,11 +1262,9 @@ async function syncFromSupabase() {
     }
     merged.sort((a,b) => b.created_at - a.created_at);
 
-    // 安全门：如果合并后比同步前"少了很多"，但云端返回也为空且本地原本有内容，
-    // 说明可能是云端异常返回空数据，此时保留本地 snapshot 前的内容。
+    // 安全门：本地原本有内容但云端返回空 → 保留本地内容，
+    // 避免首次登录或网络异常时清空。
     if (snapshotSize > 0 && merged.length === 0 && remoteList.length === 0) {
-      // 云端空 + 本地有内容 → 极可能是首次登录 / 网络异常返回空，
-      // 保留本地已有内容，不做任何清空。
       notes = snapshotBefore;
     } else {
       notes = merged;
@@ -1274,15 +1273,18 @@ async function syncFromSupabase() {
     pulled = remoteList.length;
     saveNotes(notes);
     localStorage.setItem(SYNC_KEY, String(Date.now()));
+    // 首次同步标记：仅在同步成功后设置，确保下次进入"云端权威"模式
     localStorage.setItem(FIRST_SYNC_KEY, '1');
+    try { console.log('[sync] pulled=' + pulled + ', pushed=' + pushed + ', isFirst=' + isFirstSyncForUser); } catch(e) {}
 
     if (pulled || pushed) toast(`同步完成：拉 ${pulled} 条，上传 ${pushed} 条`);
     else toast('已与云端同步');
     renderHome();
     renderLib();
   } catch (err) {
-    // 关键：网络失败/云端出错时，绝对不改写 notes，确保本地数据安全
+    // 失败时恢复 snapshot，绝对不动本地 notes
     notes = snapshotBefore;
+    try { console.error('[sync] failed:', err); } catch(e) {}
     toast('同步失败（本地数据已保留）：' + (err && err.message ? err.message : err));
   } finally {
     isSyncing = false;
@@ -1303,12 +1305,13 @@ async function pushPendingToSupabase() {
         .maybeSingle();
       if (error) throw error;
       if (data && data.id) {
-        // 用云端返回的 UUID 替换本地 id
         const idx = notes.findIndex(x => x.id === n.id);
         if (idx >= 0) notes[idx] = { ...notes[idx], id: data.id, _synced: true };
       }
       done++;
-    } catch (e) { /* 跳过本条，稍后重试 */ }
+    } catch (e) {
+      try { console.error('[push] failed for:', n, e); } catch(x) {}
+    }
   }
   saveNotes(notes);
   return done;
@@ -1323,7 +1326,10 @@ async function syncNow() {
 }
 
 window.addEventListener('online', async () => {
-  if (currentUser) await pushPendingToSupabase();
+  if (currentUser) {
+    await pushPendingToSupabase();
+    await syncFromSupabase();
+  }
 });
 
 /* ========= 工具：自定义标签管理 ========= */
@@ -1639,7 +1645,7 @@ function doSave(drama, content, ep, isEdit) {
             .eq('id', editingId)
             .then(({ error }) => {
               if (!error) { notes[idx]._synced = true; saveNotes(notes); }
-              else toast('云端更新失败：' + error.message);
+              else try { console.error('[edit] update failed:', error.message); } catch(x) {}
             })
             .catch(() => {});
         } else {
@@ -1662,7 +1668,7 @@ function doSave(drama, content, ep, isEdit) {
                   saveNotes(notes);
                 }
               } else if (error) {
-                toast('云端保存失败：' + error.message);
+                try { console.error('[edit] insert failed:', error.message); } catch(x) {}
               }
             })
             .catch(() => {});
@@ -1676,13 +1682,16 @@ function doSave(drama, content, ep, isEdit) {
     return;
   }
 
+  // _synced 永远先设为 false — 只有 Supabase insert 成功后才变 true。
+  // 这样确保：(a) 未登录时记录保持 false，但 pushPendingToSupabase 只有 currentUser 存在才执行；
+  // (b) 登录状态下 currentUser 在 getSession() 之前创建的记录，登录完成后能够被正确推送到云端。
   const newNote = {
     id: uid(),
     drama_name: drama, content, tags,
     episode: ep, character: [...selectedChars],
     created_at: now, updated_at: now,
     tag: tags[0] || '感受',
-    _synced: !currentUser
+    _synced: false
   };
   notes.unshift(newNote);
   saveNotes(notes);
@@ -1701,6 +1710,7 @@ function doSave(drama, content, ep, isEdit) {
             saveNotes(notes);
           }
         } else if (error) {
+          try { console.error('[save] insert failed:', error.message); } catch(x) {}
           toast('云端保存失败：' + error.message);
         }
       })
