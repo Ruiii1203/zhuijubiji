@@ -1193,11 +1193,12 @@ async function signOut() {
 
 function noteToSupabase(n) {
   return {
+    user_id: currentUser ? currentUser.id : null,
     drama_name: n.drama_name,
     content: n.content,
-    episode: n.episode || null,
+    episode: (n.episode && String(n.episode).trim()) || null,
     tag: (n.tags && n.tags[0]) || n.tag || '感受',
-    character: (n.character && n.character.length) ? n.character : null
+    character: (n.character && n.character.length) ? [...n.character] : null
   };
 }
 function noteFromSupabase(row) {
@@ -1582,11 +1583,8 @@ function doSave(drama, content, ep, isEdit) {
     if (idx >= 0) {
       const updated = {
         ...notes[idx],
-        drama_name: drama,
-        content,
-        tags,
-        episode: ep,
-        character: [...selectedChars],
+        drama_name: drama, content, tags,
+        episode: ep, character: [...selectedChars],
         updated_at: now
       };
       notes[idx] = updated;
@@ -1594,39 +1592,39 @@ function doSave(drama, content, ep, isEdit) {
       if (supabaseClient && currentUser) {
         const isSupabaseId = !editingId.startsWith('n_');
         if (isSupabaseId) {
-          // 已经是 Supabase 记录：直接 update
-          supabaseClient.from('drama_notes').update({
-            drama_name: drama, content,
-            episode: ep || null,
-            tag: tags[0] || '感受',
-            character: (selectedChars.length ? [...selectedChars] : null)
-          }).eq('id', editingId).then(({ error }) => {
-            if (!error) { notes[idx]._synced = true; saveNotes(notes); }
-          }).catch(() => {});
+          // 已经是云端记录：update
+          supabaseClient.from('drama_notes')
+            .update(noteToSupabase(updated))
+            .eq('id', editingId)
+            .then(({ error }) => {
+              if (!error) { notes[idx]._synced = true; saveNotes(notes); }
+              else toast('云端更新失败：' + error.message);
+            })
+            .catch(() => {});
         } else {
-          // 这是本地创建的记录（未上传过）：当作新记录插入，成功后替换本地 id
-          supabaseClient.from('drama_notes').insert({
-            drama_name: drama, content,
-            episode: ep || null,
-            tag: tags[0] || '感受',
-            character: (selectedChars.length ? [...selectedChars] : null)
-          }).select('id').maybeSingle().then(({ data, error }) => {
-            if (!error && data && data.id) {
-              // 删掉本地旧的 uid 记录，再以 UUID 形式重新写入（_synced=true）
-              notes = notes.filter(n => n.id !== editingId);
-              notes.unshift({
-                id: data.id,
-                drama_name: drama, content, tags,
-                episode: ep,
-                character: [...selectedChars],
-                created_at: notes[idx]?.created_at || now,
-                updated_at: now,
-                tag: tags[0] || '感受',
-                _synced: true
-              });
-              saveNotes(notes);
-            }
-          }).catch(() => {});
+          // 本地创建的记录 — 当作新记录 insert，成功后把本地 id 换成 Supabase UUID
+          const localId = editingId;
+          const created = notes[idx].created_at || now;
+          supabaseClient.from('drama_notes')
+            .insert(noteToSupabase(updated))
+            .select('id')
+            .maybeSingle()
+            .then(({ data, error }) => {
+              if (!error && data && data.id) {
+                const realIdx = notes.findIndex(n => n.id === localId);
+                if (realIdx >= 0) {
+                  notes[realIdx] = {
+                    ...notes[realIdx],
+                    id: data.id, _synced: true,
+                    created_at: created, updated_at: now
+                  };
+                  saveNotes(notes);
+                }
+              } else if (error) {
+                toast('云端保存失败：' + error.message);
+              }
+            })
+            .catch(() => {});
         }
       }
       toast('已更新');
@@ -1643,26 +1641,29 @@ function doSave(drama, content, ep, isEdit) {
     episode: ep, character: [...selectedChars],
     created_at: now, updated_at: now,
     tag: tags[0] || '感受',
-    _synced: !currentUser // 未登录时直接标记为已同步（不影响，因为不走云端）
+    _synced: !currentUser
   };
   notes.unshift(newNote);
   saveNotes(notes);
 
   if (supabaseClient && currentUser) {
-    supabaseClient.from('drama_notes').insert({
-      drama_name: drama, content,
-      episode: ep || null,
-      tag: tags[0] || '感受',
-      character: (selectedChars.length ? [...selectedChars] : null)
-    }).select('id').maybeSingle().then(({ data, error }) => {
-      if (!error && data && data.id) {
-        const localIdx = notes.findIndex(n => n.id === newNote.id);
-        if (localIdx >= 0) {
-          notes[localIdx] = { ...notes[localIdx], id: data.id, _synced: true };
-          saveNotes(notes);
+    const localId = newNote.id;
+    supabaseClient.from('drama_notes')
+      .insert(noteToSupabase(newNote))
+      .select('id')
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!error && data && data.id) {
+          const realIdx = notes.findIndex(n => n.id === localId);
+          if (realIdx >= 0) {
+            notes[realIdx] = { ...notes[realIdx], id: data.id, _synced: true };
+            saveNotes(notes);
+          }
+        } else if (error) {
+          toast('云端保存失败：' + error.message);
         }
-      }
-    }).catch(() => {});
+      })
+      .catch(() => {});
   }
   openModal('modal-saved');
 }
@@ -1907,13 +1908,33 @@ function deleteCurrent() {
   notes = notes.filter(n => n.id !== idToDelete);
   saveNotes(notes);
   currentDetailId = null;
-  if (supabaseClient && currentUser && idToDelete) {
+  // 只有云端有记录时才尝试删除（UUID 不以 n_ 开头）
+  if (supabaseClient && currentUser && idToDelete && !String(idToDelete).startsWith('n_')) {
     supabaseClient.from('drama_notes').delete().eq('id', idToDelete).then(() => {}).catch(() => {});
   }
   toast('已删除');
   goHome();
 }
 
+function deleteBatch() {
+  const ids = Array.from(batchSelected);
+  if (ids.length === 0) { toast('请先选择素材'); return; }
+  if (!confirm(`确认删除选中的 ${ids.length} 条记录？删除后不可恢复`)) return;
+  notes = notes.filter(n => !batchSelected.has(n.id));
+  saveNotes(notes);
+  // 批量删除云端 — 挑出 UUID 记录
+  const cloudIds = ids.filter(id => !String(id).startsWith('n_'));
+  if (supabaseClient && currentUser && cloudIds.length > 0) {
+    cloudIds.forEach(id => {
+      supabaseClient.from('drama_notes').delete().eq('id', id).then(() => {}).catch(() => {});
+    });
+  }
+  batchSelected = new Set();
+  toast(`已删除 ${ids.length} 条`);
+  renderLib();
+  hideBatchBar();
+  goHome();
+}
 function copyCurrent() {
   const n = notes.find(x => x.id === currentDetailId);
   if (!n) return;
