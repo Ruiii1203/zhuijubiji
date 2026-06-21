@@ -1224,25 +1224,37 @@ async function syncFromSupabase() {
   isSyncing = true;
   let pulled = 0, pushed = 0;
   try {
+    // 1. 先把本地未上传的记录 push 到云端（确保云端有本端的最新数据）
+    pushed = await pushPendingToSupabase();
+
+    // 2. 从云端拉取当前用户的所有记录（云端是权威源）
     const { data, error } = await supabaseClient
       .from('drama_notes')
       .select('*')
       .order('created_at', { ascending: false });
     if (error) throw error;
-    if (data && data.length > 0) {
-      const remoteList = data.map(noteFromSupabase);
-      const byId = new Map();
-      notes.forEach(n => byId.set(n.id, n));
-      remoteList.forEach(r => byId.set(r.id, r));
-      notes = Array.from(byId.values()).sort((a,b)=> b.created_at - a.created_at);
-      pulled = remoteList.length;
-    }
-    // 无论云端是否有数据，都要把本地未上传的记录推上去
-    pushed = await pushPendingToSupabase();
+
+    // 3. 合并：以云端为主，保留本地的"未上传但成功写入云端的记录"
+    //    （成功后云端已经有了，只是本地 id 可能是 n_xxx 但已经被替换为 UUID）
+    const remoteList = (data || []).map(noteFromSupabase);
+    const remoteIds = new Set(remoteList.map(r => r.id));
+
+    // 本地 _synced=true 但云端没有的 → 说明其他端删除了 → 本地也删除
+    // 本地 _synced=false 且云端没有的 → 说明刚创建但未上传成功 → 保留
+    const localOnly = notes.filter(n => !remoteIds.has(n.id) && !n._synced);
+
+    const merged = [...remoteList, ...localOnly];
+    merged.sort((a,b) => b.created_at - a.created_at);
+
+    notes = merged;
+    pulled = remoteList.length;
+
     saveNotes(notes);
     localStorage.setItem(SYNC_KEY, String(Date.now()));
     if (pulled || pushed) toast(`同步完成：拉 ${pulled} 条，上传 ${pushed} 条`);
     else toast('已与云端同步');
+    renderHome();
+    renderLib();
   } catch (err) {
     toast('同步失败：' + (err && err.message ? err.message : err));
   } finally {
