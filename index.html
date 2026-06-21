@@ -1223,40 +1223,67 @@ async function syncFromSupabase() {
   if (isSyncing) return;
   isSyncing = true;
   let pulled = 0, pushed = 0;
+
+  const FIRST_SYNC_KEY = 'drama_notes_first_sync_' + currentUser.id;
+  const isFirstSyncForUser = !localStorage.getItem(FIRST_SYNC_KEY);
+
+  // 先把本地 notes 原样保留一份：一旦网络出错 / 云端异常（例如返回空），
+  // 我们绝对不动本地的现有内容，避免"重新打开 app 后记录全没了"的灾难。
+  const snapshotBefore = notes.slice();
+  const snapshotSize = snapshotBefore.length;
+
   try {
-    // 1. 先把本地未上传的记录 push 到云端（确保云端有本端的最新数据）
+    // 1. 先把本地未上传的记录 push 到云端
     pushed = await pushPendingToSupabase();
 
-    // 2. 从云端拉取当前用户的所有记录（云端是权威源）
+    // 2. 从云端拉取当前用户的所有记录
     const { data, error } = await supabaseClient
       .from('drama_notes')
       .select('*')
       .order('created_at', { ascending: false });
     if (error) throw error;
 
-    // 3. 合并：以云端为主，保留本地的"未上传但成功写入云端的记录"
-    //    （成功后云端已经有了，只是本地 id 可能是 n_xxx 但已经被替换为 UUID）
     const remoteList = (data || []).map(noteFromSupabase);
-    const remoteIds = new Set(remoteList.map(r => r.id));
 
-    // 本地 _synced=true 但云端没有的 → 说明其他端删除了 → 本地也删除
-    // 本地 _synced=false 且云端没有的 → 说明刚创建但未上传成功 → 保留
-    const localOnly = notes.filter(n => !remoteIds.has(n.id) && !n._synced);
-
-    const merged = [...remoteList, ...localOnly];
+    // 3. 合并策略（三态）：
+    //    - 首次同步该账号：本地 ∪ 云端，按 id 去重，绝不删除
+    //    - 非首次同步：云端权威 + 本地 _synced=false 的待上传记录
+    let merged;
+    if (isFirstSyncForUser) {
+      const byId = new Map();
+      for (const n of notes) byId.set(n.id, n);
+      for (const r of remoteList) byId.set(r.id, r);
+      merged = Array.from(byId.values());
+    } else {
+      const remoteIds = new Set(remoteList.map(r => r.id));
+      const pendingLocal = notes.filter(n => !remoteIds.has(n.id) && !n._synced);
+      merged = [...remoteList, ...pendingLocal];
+    }
     merged.sort((a,b) => b.created_at - a.created_at);
 
-    notes = merged;
-    pulled = remoteList.length;
+    // 安全门：如果合并后比同步前"少了很多"，但云端返回也为空且本地原本有内容，
+    // 说明可能是云端异常返回空数据，此时保留本地 snapshot 前的内容。
+    if (snapshotSize > 0 && merged.length === 0 && remoteList.length === 0) {
+      // 云端空 + 本地有内容 → 极可能是首次登录 / 网络异常返回空，
+      // 保留本地已有内容，不做任何清空。
+      notes = snapshotBefore;
+    } else {
+      notes = merged;
+    }
 
+    pulled = remoteList.length;
     saveNotes(notes);
     localStorage.setItem(SYNC_KEY, String(Date.now()));
+    localStorage.setItem(FIRST_SYNC_KEY, '1');
+
     if (pulled || pushed) toast(`同步完成：拉 ${pulled} 条，上传 ${pushed} 条`);
     else toast('已与云端同步');
     renderHome();
     renderLib();
   } catch (err) {
-    toast('同步失败：' + (err && err.message ? err.message : err));
+    // 关键：网络失败/云端出错时，绝对不改写 notes，确保本地数据安全
+    notes = snapshotBefore;
+    toast('同步失败（本地数据已保留）：' + (err && err.message ? err.message : err));
   } finally {
     isSyncing = false;
   }
