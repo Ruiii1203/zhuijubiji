@@ -1192,14 +1192,17 @@ async function signOut() {
 }
 
 function noteToSupabase(n) {
-  return {
+  const payload = {
     user_id: currentUser ? currentUser.id : null,
     drama_name: n.drama_name,
     content: n.content,
     episode: (n.episode && String(n.episode).trim()) || null,
     tag: (n.tags && n.tags[0]) || n.tag || '感受',
-    character: (n.character && n.character.length) ? [...n.character] : null
+    characters: (n.character && n.character.length) ? [...n.character] : null
   };
+  // 调试：把 payload 输出到 console，方便在浏览器调试工具中查看
+  try { console.log('[Supabase] insert payload:', payload); } catch(e) {}
+  return payload;
 }
 function noteFromSupabase(row) {
   return {
@@ -1208,7 +1211,7 @@ function noteFromSupabase(row) {
     content: row.content,
     tags: row.tag ? [row.tag] : ['感受'],
     episode: row.episode || '',
-    character: row.character || [],
+    character: row.characters || row.character || [],
     created_at: new Date(row.created_at).getTime() || Date.now(),
     updated_at: new Date(row.updated_at).getTime() || Date.now(),
     tag: row.tag || '感受',
