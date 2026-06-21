@@ -10,6 +10,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/icon-192.png">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <title>追剧笔记</title>
 <style>
   :root {
@@ -781,6 +782,34 @@
 
   .highlight { background: var(--accent); color: #fff8e7; padding: 1px 4px; border-radius: 4px; }
 
+  .auth-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 16px 18px;
+    margin-bottom: 18px;
+    box-shadow: var(--shadow);
+  }
+
+  .auth-email {
+    font-size: 14px;
+    color: var(--accent-deep);
+    font-weight: 600;
+    margin-bottom: 10px;
+    word-break: break-all;
+  }
+
+  .auth-actions-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .auth-actions-row .btn-primary {
+    padding: 12px 18px;
+    font-size: 14px;
+  }
+
   @media (min-width: 768px) {
     .app { padding-bottom: 80px; }
     .page { padding: 32px 24px; }
@@ -796,7 +825,31 @@
     <div class="header">
       <div class="brand">DRAMATIC NOTES</div>
       <h1 class="page-title">追剧笔记</h1>
-      <div class="page-sub">记录灵感，写剧评时快速调取</div>
+      <div class="page-sub" id="page-sub-main">记录灵感，写剧评时快速调取</div>
+    </div>
+
+    <!-- 用户状态 / 登录卡片 -->
+    <div class="auth-card" id="auth-card">
+      <div class="auth-logged" id="auth-logged" style="display:none;">
+        <div class="auth-email" id="auth-email">—</div>
+        <div class="auth-actions-row">
+          <button class="btn-ghost" id="btn-sync-now" onclick="syncNow()">立即同步</button>
+          <button class="btn-ghost" onclick="signOut()">退出登录</button>
+        </div>
+      </div>
+      <div class="auth-form" id="auth-form">
+        <div class="form-group" style="margin-bottom:10px;">
+          <input class="input" id="f-email" placeholder="邮箱" autocomplete="email" type="email">
+        </div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <input class="input" id="f-password" placeholder="密码（至少 6 位）" type="password" autocomplete="current-password">
+        </div>
+        <div class="auth-actions-row">
+          <button class="btn-secondary" onclick="signUp()">注册</button>
+          <button class="btn-primary btn-block" onclick="signIn()">登录</button>
+        </div>
+        <div class="field-error-msg" id="auth-err" style="display:none; margin-top:10px; text-align:center;"></div>
+      </div>
     </div>
 
     <div class="hero-card">
@@ -999,38 +1052,231 @@
 </div>
 
 <script>
-/* ========= 数据层 ========= */
 const STORAGE_KEY = 'drama_notes_v1';
+const SYNC_KEY = 'drama_notes_last_sync';
 const DEFAULT_TAGS = ['台词', '感受', '剧情', '角色', '金句', '伏笔'];
+
+const SUPABASE_URL = 'https://xbwmghuohjtbvzimwpgh.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_vPfRHIhNgSe2Fj34jxP3dw_n2XDgFFf';
+let supabaseClient = null;
+try {
+  if (window.supabase && typeof window.supabase.createClient === 'function') {
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+  }
+} catch (e) { /* noop */ }
+
+let notes = loadNotes();
+let currentUser = null;
+let isSyncing = false;
+let selectedTags = [];
+let selectedChars = [];
+let editingId = null;
+let currentDetailId = null;
+let lastPage = 'home';
+let libFilterTag = null;
+let libFilterDrama = null;
+let batchSelected = new Set();
+let savedPayload = null;
 
 function loadNotes() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const list = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) return [];
+    return list.map(n => ({
+      id: n.id || uid(),
+      drama_name: n.drama_name,
+      content: n.content,
+      tags: Array.isArray(n.tags) ? n.tags : (n.tag ? [n.tag] : []),
+      episode: n.episode || '',
+      character: Array.isArray(n.character) ? n.character : [],
+      created_at: n.created_at || n._created_at || Date.now(),
+      updated_at: n.updated_at || n._created_at || Date.now(),
+      tag: n.tag || (n.tags && n.tags[0]) || '感受',
+      _synced: n._synced === true || n.supabase_id || false,
+      _id: n._id
+    }));
   } catch (e) { return []; }
 }
 function saveNotes(list) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
 }
 function uid() {
-  return 'n_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  return 'n_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+function uuid() {
+  if (crypto && crypto.randomUUID) return crypto.randomUUID();
+  return 'local_' + Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 function fmtTime(ts) {
+  if (!ts) return '';
   const d = new Date(ts);
   const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}, ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function primaryTag(n) { return (n.tags && n.tags[0]) || n.tag || '感受'; }
+
+/* ========= Supabase 认证 / 同步 ========= */
+
+function showAuthErr(msg) {
+  const el = document.getElementById('auth-err');
+  if (msg) { el.textContent = msg; el.style.display = 'block'; }
+  else el.style.display = 'none';
+}
+function renderAuthUI() {
+  const formEl = document.getElementById('auth-form');
+  const loggedEl = document.getElementById('auth-logged');
+  const emailEl = document.getElementById('auth-email');
+  const subMain = document.getElementById('page-sub-main');
+  const hero = document.getElementById('hero-greeting');
+  if (!formEl || !loggedEl) return;
+  if (currentUser) {
+    formEl.style.display = 'none';
+    loggedEl.style.display = 'block';
+    emailEl.textContent = currentUser.email || '已登录';
+    if (hero) hero.textContent = '欢迎回来，开始记录吧';
+  } else {
+    formEl.style.display = 'block';
+    loggedEl.style.display = 'none';
+    if (hero) hero.textContent = '登录后多端同步；未登录数据仅保存在本机';
+  }
 }
 
-/* ========= 状态 ========= */
-let notes = loadNotes();
-let selectedTags = [];     // 新建页选中的标签
-let selectedChars = [];    // 新建页选中的角色数组
-let editingId = null;      // 编辑中的 ID（null=新建）
-let currentDetailId = null;
-let lastPage = 'home';
-let libFilterTag = null;
-let libFilterDrama = null;
-let batchSelected = new Set();
+async function signIn() {
+  showAuthErr('');
+  const email = document.getElementById('f-email').value.trim();
+  const password = document.getElementById('f-password').value;
+  if (!email || !password) { showAuthErr('请填写邮箱和密码'); return; }
+  if (!supabaseClient) { showAuthErr('Supabase SDK 暂未加载'); return; }
+  try {
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    currentUser = data.user;
+    toast('登录成功');
+    renderAuthUI();
+    await syncFromSupabase();
+    renderHome();
+  } catch (err) {
+    showAuthErr(err && err.message ? err.message : '登录失败，请检查邮箱或密码');
+  }
+}
+async function signUp() {
+  showAuthErr('');
+  const email = document.getElementById('f-email').value.trim();
+  const password = document.getElementById('f-password').value;
+  if (!email || !password) { showAuthErr('请填写邮箱和密码'); return; }
+  if (password.length < 6) { showAuthErr('密码至少 6 位'); return; }
+  if (!supabaseClient) { showAuthErr('Supabase SDK 暂未加载'); return; }
+  try {
+    const { data, error } = await supabaseClient.auth.signUp({ email, password });
+    if (error) throw error;
+    if (data && data.session) {
+      currentUser = data.user;
+      renderAuthUI();
+      toast('注册并登录成功');
+      await syncFromSupabase();
+      renderHome();
+    } else if (data && data.user && !data.user.confirmed_at) {
+      toast('注册信息已发送到邮箱，请查收确认');
+    }
+  } catch (err) {
+    showAuthErr(err && err.message ? err.message : '注册失败');
+  }
+}
+async function signOut() {
+  if (!supabaseClient) { currentUser = null; renderAuthUI(); return; }
+  try { await supabaseClient.auth.signOut(); } catch (e) { /* noop */ }
+  currentUser = null;
+  renderAuthUI();
+  toast('已退出登录，数据将仅保存在本机');
+}
+
+function noteToSupabase(n) {
+  return {
+    drama_name: n.drama_name,
+    content: n.content,
+    episode: n.episode || null,
+    tag: (n.tags && n.tags[0]) || n.tag || '感受',
+    character: (n.character && n.character.length) ? n.character : null
+  };
+}
+function noteFromSupabase(row) {
+  return {
+    id: String(row.id),
+    drama_name: row.drama_name,
+    content: row.content,
+    tags: row.tag ? [row.tag] : ['感受'],
+    episode: row.episode || '',
+    character: row.character || [],
+    created_at: new Date(row.created_at).getTime() || Date.now(),
+    updated_at: new Date(row.updated_at).getTime() || Date.now(),
+    tag: row.tag || '感受',
+    _synced: true
+  };
+}
+
+async function syncFromSupabase() {
+  if (!supabaseClient || !currentUser) return;
+  if (isSyncing) return;
+  isSyncing = true;
+  try {
+    const { data, error } = await supabaseClient
+      .from('drama_notes')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      await pushPendingToSupabase();
+      return;
+    }
+    const remoteList = data.map(noteFromSupabase);
+    const byId = new Map();
+    notes.forEach(n => byId.set(n.id, n));
+    remoteList.forEach(r => byId.set(r.id, r));
+    notes = Array.from(byId.values()).sort((a,b)=> b.created_at - a.created_at);
+    saveNotes(notes);
+    localStorage.setItem(SYNC_KEY, String(Date.now()));
+    toast(`已同步 ${remoteList.length} 条记录`);
+  } catch (err) {
+    toast('同步失败：' + (err && err.message ? err.message : err));
+  } finally {
+    isSyncing = false;
+  }
+}
+
+async function pushPendingToSupabase() {
+  if (!supabaseClient || !currentUser) return 0;
+  const pending = notes.filter(n => !n._synced);
+  if (pending.length === 0) return 0;
+  let done = 0;
+  for (const n of pending) {
+    try {
+      const { data, error } = await supabaseClient
+        .from('drama_notes')
+        .insert(noteToSupabase(n))
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (data && data.id) n._synced = true;
+      done++;
+    } catch (e) { /* 跳过本条，稍后继续尝试 */ }
+  }
+  saveNotes(notes);
+  if (done) toast(`已上传 ${done} 条到云端`);
+  return done;
+}
+
+async function syncNow() {
+  if (!currentUser) { toast('请先登录'); return; }
+  if (!navigator.onLine) { toast('当前离线，联网后会自动同步'); return; }
+  await pushPendingToSupabase();
+  await syncFromSupabase();
+  renderHome();
+}
+
+window.addEventListener('online', async () => {
+  if (currentUser) await pushPendingToSupabase();
+});
 
 /* ========= 工具：自定义标签管理 ========= */
 function getAllTagsUsed() {
@@ -1328,7 +1574,7 @@ function doSave(drama, content, ep, isEdit) {
   if (isEdit && editingId) {
     const idx = notes.findIndex(n => n.id === editingId);
     if (idx >= 0) {
-      notes[idx] = {
+      const updated = {
         ...notes[idx],
         drama_name: drama,
         content,
@@ -1337,7 +1583,20 @@ function doSave(drama, content, ep, isEdit) {
         character: [...selectedChars],
         updated_at: now
       };
+      notes[idx] = updated;
       saveNotes(notes);
+      if (supabaseClient && currentUser) {
+        supabaseClient.from('drama_notes').update({
+          drama_name: drama,
+          content,
+          episode: ep || null,
+          tag: tags[0] || '感受',
+          character: (selectedChars.length ? [...selectedChars] : null)
+        }).eq('id', editingId).then(({ error }) => {
+          if (!error) notes[idx]._synced = true;
+          saveNotes(notes);
+        }).catch(() => {});
+      }
       toast('已更新');
       if (currentDetailId === editingId) renderDetail();
       else goHome();
@@ -1346,7 +1605,7 @@ function doSave(drama, content, ep, isEdit) {
     return;
   }
 
-  notes.push({
+  const newNote = {
     id: uid(),
     drama_name: drama,
     content,
@@ -1354,9 +1613,27 @@ function doSave(drama, content, ep, isEdit) {
     episode: ep,
     character: [...selectedChars],
     created_at: now,
-    updated_at: now
-  });
+    updated_at: now,
+    tag: tags[0] || '感受',
+    _synced: false
+  };
+  notes.unshift(newNote);
   saveNotes(notes);
+
+  if (supabaseClient && currentUser) {
+    supabaseClient.from('drama_notes').insert({
+      drama_name: drama,
+      content,
+      episode: ep || null,
+      tag: tags[0] || '感受',
+      character: (selectedChars.length ? [...selectedChars] : null)
+    }).select('id').maybeSingle().then(({ data, error }) => {
+      if (!error && data && data.id) {
+        const local = notes.find(n => n.id === newNote.id);
+        if (local) { local._synced = true; saveNotes(notes); }
+      }
+    }).catch(() => {});
+  }
   openModal('modal-saved');
 }
 
@@ -1595,10 +1872,14 @@ function editCurrent() {
 }
 
 function deleteCurrent() {
-  if (!confirm('确认删除这条记录？')) return;
-  notes = notes.filter(n => n.id !== currentDetailId);
+  if (!confirm('确认删除这条记录？删除后不可恢复')) return;
+  const idToDelete = currentDetailId;
+  notes = notes.filter(n => n.id !== idToDelete);
   saveNotes(notes);
   currentDetailId = null;
+  if (supabaseClient && currentUser && idToDelete) {
+    supabaseClient.from('drama_notes').delete().eq('id', idToDelete).then(() => {}).catch(() => {});
+  }
   toast('已删除');
   goHome();
 }
@@ -1691,20 +1972,42 @@ function downloadFile(type) {
 function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
-// 初始化
+/* ========= 初始化 ========= */
+renderAuthUI();
 renderHome();
+
+if (supabaseClient) {
+  (async () => {
+    try {
+      const { data } = await supabaseClient.auth.getSession();
+      if (data && data.session && data.session.user) {
+        currentUser = data.session.user;
+        renderAuthUI();
+        await syncFromSupabase();
+        renderHome();
+      }
+    } catch (e) { /* noop */ }
+
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      if (session && session.user) {
+        currentUser = session.user;
+        renderAuthUI();
+        syncFromSupabase().then(() => renderHome()).catch(() => {});
+      } else {
+        currentUser = null;
+        renderAuthUI();
+      }
+    });
+  })();
+}
 
 /* ========= PWA：Service Worker 注册 & 安装提示 ========= */
 (function initPWA() {
-  // 注册 Service Worker
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch(() => {
-        // 本地 file:// 打开时浏览器会拒绝注册，属于预期失败，不影响功能
-      });
+      navigator.serviceWorker.register('./sw.js').catch(() => { });
     });
   }
-
   // 安装提示：浏览器触发 beforeinstallprompt 时显示按钮
   let deferredPrompt = null;
   const installBtn = document.getElementById('install-btn');
