@@ -1953,6 +1953,21 @@ function downloadBatch() {
   if (batchSelected.size === 0) { toast('请先选择素材'); return; }
   openModal('modal-export');
 }
+
+function deleteBatch() {
+  const ids = Array.from(batchSelected);
+  if (ids.length === 0) { toast('请先选择素材'); return; }
+  if (!confirm(`确认删除选中的 ${ids.length} 条记录？删除后不可恢复`)) return;
+  notes = notes.filter(n => !batchSelected.has(n.id));
+  saveNotes(notes);
+  if (supabaseClient && currentUser) {
+    supabaseClient.from('drama_notes').delete().in('id', ids).then(() => {}).catch(() => {});
+  }
+  batchSelected = new Set();
+  toast(`已删除 ${ids.length} 条`);
+  renderLib();
+  hideBatchBar();
+}
 function downloadFile(type) {
   const ids = Array.from(batchSelected);
   const list = notes.filter(n => ids.includes(n.id)).sort((a,b)=> a.created_at - b.created_at);
